@@ -2,7 +2,11 @@
 const http = require("http");
 const WebSocket = require("ws");
 
-const server = http.createServer();
+const server = http.createServer((req, res) => {
+  res.writeHead(200, { "Content-Type": "text/plain" });
+  res.end("WebSocket server is running");
+});
+
 const wss = new WebSocket.Server({ server });
 
 wss.on("connection", ws => {
@@ -18,7 +22,6 @@ wss.on("connection", ws => {
   });
 });
 
-// ★ Render が割り当てるポートを必ず使う
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {
