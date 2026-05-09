@@ -14,7 +14,8 @@ const players = new Map();
 let nextPlayerId = 1;
 
 // --- 部屋管理 ---
-const rooms = {}; // roomName → { players: [{ id, name }] }
+// rooms = { roomName: { players: [{ id, name }] } }
+const rooms = {};
 
 // --- 部屋にメッセージを送る ---
 function broadcastToRoom(roomName, obj) {
@@ -106,4 +107,3 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log("Server running on port " + PORT);
 });
-

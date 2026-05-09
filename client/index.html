@@ -13,8 +13,7 @@
   <input id="roomNameInput" placeholder="部屋名を入力">
   <button id="createBtn">部屋を作成</button>
   <br><br>
-
-  <input id="roomIdInput" placeholder="部屋IDを入力">
+  
   <button id="joinBtn">部屋に参加</button>
 
   <pre id="log"></pre>
@@ -72,7 +71,7 @@
 
     joinBtn.onclick = () => {
       const playerName = nameInput.value.trim();
-      const roomName = document.getElementById("roomIdInput").value.trim();
+      const roomName = document.getElementById("roomNameInput").value.trim();
 
       if (!playerName) {
         alert("名前を入力してください");
