@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Room Test</title>
+</head>
+<body>
+  <h1>部屋テスト</h1>
+
+  <button id="createBtn">部屋を作成</button>
+  <br><br>
+
+  <input id="roomIdInput" placeholder="部屋IDを入力">
+  <button id="joinBtn">部屋に参加</button>
+
+  <h2>ログ</h2>
+  <pre id="log"></pre>
+
+  <script>
+    const log = msg => {
+      document.getElementById("log").textContent += msg + "\n";
+    };
+
+    // Render の WebSocket URL
+    const ws = new WebSocket("wss://trickal-singeki.onrender.com");
+
+    ws.onopen = () => log("接続しました");
+    ws.onmessage = e => log("受信: " + e.data);
+
+    // 部屋作成
+    document.getElementById("createBtn").onclick = () => {
+      ws.send(JSON.stringify({ type: "createRoom" }));
+      log("送信: createRoom");
+    };
+
+    // 部屋参加
+    document.getElementById("joinBtn").onclick = () => {
+      const roomId = Number(document.getElementById("roomIdInput").value);
+      ws.send(JSON.stringify({ type: "joinRoom", roomId }));
+      log("送信: joinRoom " + roomId);
+    };
+  </script>
+</body>
+</html>
