@@ -69,7 +69,8 @@ wss.on("connection", ws => {
       // 他のプレイヤーに通知
       broadcastToRoom(msg.roomId, {
         type: "playerJoined",
-        playerId: id
+        playerId: id,
+        name: msg.name
       });
     }
 

@@ -7,6 +7,8 @@
 <body>
   <h1>ロビー</h1>
 
+  <input id="playerName" placeholder="名前を入力">
+
   <button id="createBtn">部屋を作成</button>
   <br><br>
 
@@ -16,6 +18,16 @@
   <pre id="log"></pre>
 
   <script>
+    const nameInput = document.getElementById("playerName");
+    const createBtn = document.getElementById("createBtn");
+    const joinBtn = document.getElementById("joinBtn");
+
+    nameInput.addEventListener("input", () => {
+      const ok = nameInput.value.trim().length > 0;
+      createBtn.disabled = !ok;
+      joinBtn.disabled = !ok;
+    });
+
     const log = msg => {
       document.getElementById("log").textContent += msg + "\n";
     };
@@ -35,13 +47,14 @@
       }
     };
 
-    document.getElementById("createBtn").onclick = () => {
+    createBtn.onclick = () => {
+      localStorage.setItem("playerName", nameInput.value.trim());
       ws.send(JSON.stringify({ type: "createRoom" }));
     };
 
-    document.getElementById("joinBtn").onclick = () => {
+    joinBtn.onclick = () => {
+      localStorage.setItem("playerName", nameInput.value.trim());
       const roomId = Number(document.getElementById("roomIdInput").value);
-      ws.send(JSON.stringify({ type: "joinRoom", roomId }));
       location.href = `room.html?roomId=${roomId}`;
     };
   </script>

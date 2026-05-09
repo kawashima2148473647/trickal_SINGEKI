@@ -7,6 +7,8 @@
 <body>
   <h1>部屋ページ</h1>
 
+  <h2>部屋番号: <span id="roomNumber"></span></h2>
+
   <h2>プレイヤー一覧</h2>
   <ul id="players"></ul>
 
@@ -16,30 +18,39 @@
     const params = new URLSearchParams(location.search);
     const roomId = params.get("roomId");
 
+    document.getElementById("roomNumber").textContent = roomId;
+
+    const playerName = localStorage.getItem("playerName");
+
     const ws = new WebSocket("wss://trickal-singeki.onrender.com");
 
     const playersEl = document.getElementById("players");
 
+    // 名前を取得
     ws.onopen = () => {
-      ws.send(JSON.stringify({ type: "joinRoom", roomId: Number(roomId) }));
+      ws.send(JSON.stringify({
+        type: "joinRoom",
+        roomId: Number(roomId),
+        name: playerName
+      }));
     };
 
     ws.onmessage = e => {
       const msg = JSON.parse(e.data);
 
-      if (msg.type === "playerJoined") {
-        const li = document.createElement("li");
-        li.textContent = "Player " + msg.playerId;
-        playersEl.appendChild(li);
-      }
-
       if (msg.type === "playerList") {
         playersEl.innerHTML = "";
-        msg.players.forEach(id => {
+        msg.players.forEach(p => {
           const li = document.createElement("li");
-          li.textContent = "Player " + id;
+          li.textContent = p.name;
           playersEl.appendChild(li);
         });
+      }
+
+      if (msg.type === "playerJoined") {
+        const li = document.createElement("li");
+        li.textContent = msg.name;
+        playersEl.appendChild(li);
       }
     };
 
