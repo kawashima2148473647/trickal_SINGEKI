@@ -47,10 +47,9 @@
         });
       }
 
+      // playerJoined は描画しない（通知だけ）
       if (msg.type === "playerJoined") {
-        const li = document.createElement("li");
-        li.textContent = msg.name;
-        playersEl.appendChild(li);
+        console.log("joined:", msg.name);
       }
     };
 
