@@ -76,7 +76,7 @@ wss.on("connection", ws => {
       }));
 
       broadcastToRoom(msg.roomName, {
-        type: "playerJoined",
+        type: "playerList",
         name: msg.name
       });
 
@@ -91,8 +91,8 @@ wss.on("connection", ws => {
       room.players = room.players.filter(p => p.id !== id);
 
       broadcastToRoom(msg.roomName, {
-        type: "playerLeft",
-        playerId: id
+        type: "playerList",
+        players: room.players
       });
 
       return;

@@ -38,6 +38,7 @@
     ws.onmessage = e => {
       const msg = JSON.parse(e.data);
 
+      // プレイヤー一覧を常に最新に描画
       if (msg.type === "playerList") {
         playersEl.innerHTML = "";
         msg.players.forEach(p => {
@@ -47,9 +48,14 @@
         });
       }
 
-      // playerJoined は描画しない（通知だけ）
+      // 参加通知（描画はしない）
       if (msg.type === "playerJoined") {
         console.log("joined:", msg.name);
+      }
+
+      // 退出通知（描画はしない）
+      if (msg.type === "playerLeft") {
+        console.log("left:", msg.playerId);
       }
     };
 
