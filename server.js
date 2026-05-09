@@ -1,17 +1,18 @@
 // server.js
-import WebSocket, { WebSocketServer } from "ws";
+const http = require("http");
+const WebSocket = require("ws");
 
-const wss = new WebSocketServer({ port: process.env.PORT || 8080 });
+const server = http.createServer();
+const wss = new WebSocket.Server({ server });
 
 wss.on("connection", ws => {
-  ws.send("connected");
-
   ws.on("message", msg => {
-    // 全員に送信（ブロードキャスト）
-    wss.clients.forEach(client => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(msg.toString());
-      }
-    });
+    console.log("received:", msg);
+    ws.send("echo: " + msg);
   });
+});
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+  console.log("Server running on port " + PORT);
 });
