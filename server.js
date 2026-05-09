@@ -41,38 +41,41 @@ wss.on("connection", ws => {
 
     // 部屋作成
     if (msg.type === "createRoom") {
-      const roomId = nextRoomId++;
-      rooms[roomId] = { players: [id] };
+      const roomName = msg.roomName;
+
+      // すでに同名の部屋があればエラー
+      if (rooms[roomName]) {
+        ws.send(JSON.stringify({ type: "error", message: "その部屋名は使用されています" }));
+        return;
+      }
+
+      rooms[roomName] = { players: [] };
 
       ws.send(JSON.stringify({
         type: "roomCreated",
-        roomId
+        roomName
       }));
     }
 
     // 部屋参加
-    if (msg.type === "joinRoom") {
-      const room = rooms[msg.roomId];
-      if (!room) {
-        ws.send(JSON.stringify({ type: "error", message: "Room not found" }));
-        return;
-      }
-
-      room.players.push(id);
-
-      // 新規参加者にプレイヤー一覧を送る
-      ws.send(JSON.stringify({
-        type: "playerList",
-        players: room.players
-      }));
-
-      // 他のプレイヤーに通知
-      broadcastToRoom(msg.roomId, {
-        type: "playerJoined",
-        playerId: id,
-        name: msg.name
-      });
+    const room = rooms[msg.roomName];
+    if (!room) {
+      ws.send(JSON.stringify({ type: "error", message: "部屋が存在しません" }));
+      return;
     }
+
+    room.players.push({ id, name: msg.name });
+
+    ws.send(JSON.stringify({
+      type: "playerList",
+      players: room.players
+    }));
+
+    broadcastToRoom(msg.roomName, {
+      type: "playerJoined",
+      name: msg.name
+    });
+  }
 
     // 部屋退出
     if (msg.type === "leaveRoom") {

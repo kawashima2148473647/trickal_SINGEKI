@@ -16,9 +16,9 @@
 
   <script>
     const params = new URLSearchParams(location.search);
-    const roomId = params.get("roomId");
+    const roomName = params.get("roomName");
 
-    document.getElementById("roomNumber").textContent = roomId;
+    document.getElementById("roomNumber").textContent = roomName;
 
     const playerName = localStorage.getItem("playerName");
 
@@ -30,7 +30,7 @@
     ws.onopen = () => {
       ws.send(JSON.stringify({
         type: "joinRoom",
-        roomId: Number(roomId),
+        roomName,
         name: playerName
       }));
     };

@@ -8,7 +8,9 @@
   <h1>ロビー</h1>
 
   <input id="playerName" placeholder="名前を入力">
+  <br><br>
 
+  <input id="roomNameInput" placeholder="部屋名を入力">
   <button id="createBtn">部屋を作成</button>
   <br><br>
 
@@ -49,7 +51,19 @@
 
     createBtn.onclick = () => {
       localStorage.setItem("playerName", nameInput.value.trim());
-      ws.send(JSON.stringify({ type: "createRoom" }));
+      const roomName = document.getElementById("roomNameInput").value.trim();
+
+      if (!roomName) {
+        alert("部屋名を入力してください");
+        return;
+      }
+
+      localStorage.setItem("playerName", name);
+
+      ws.send(JSON.stringify({
+        type: "createRoom",
+        roomName
+      }));
     };
 
     joinBtn.onclick = () => {
