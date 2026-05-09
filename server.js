@@ -14,8 +14,7 @@ const players = new Map();
 let nextPlayerId = 1;
 
 // --- 部屋管理 ---
-// rooms = { roomName: { players: [{ id, name }] } }
-const rooms = {};
+const rooms = {}; // roomName → { players: [{ id, name }] }
 
 // --- 部屋にメッセージを送る ---
 function broadcastToRoom(roomName, obj) {
@@ -66,7 +65,10 @@ wss.on("connection", ws => {
         return;
       }
 
-      room.players.push({ id, name: msg.name });
+      // 重複参加を防ぐ
+      if (!room.players.some(p => p.id === id)) {
+        room.players.push({ id, name: msg.name });
+      }
 
       ws.send(JSON.stringify({
         type: "playerList",
