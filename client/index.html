@@ -39,10 +39,9 @@
     ws.onmessage = e => {
       const msg = JSON.parse(e.data);
 
-      if (msg.type === "roomCreated") {
-        // 部屋ページへ移動
-        location.href = `room.html?roomId=${msg.roomId}`;
-      }
+    if (msg.type === "roomCreated") {
+      location.href = `room.html?roomName=${msg.roomName}`;
+    }
 
       if (msg.type === "playerJoined") {
         log("誰かが参加した: " + msg.playerId);
