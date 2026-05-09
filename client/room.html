@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Room</title>
+</head>
+<body>
+  <h1>部屋ページ</h1>
+
+  <h2>プレイヤー一覧</h2>
+  <ul id="players"></ul>
+
+  <button id="leaveBtn">退出する</button>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const roomId = params.get("roomId");
+
+    const ws = new WebSocket("wss://trickal-singeki.onrender.com");
+
+    const playersEl = document.getElementById("players");
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ type: "joinRoom", roomId: Number(roomId) }));
+    };
+
+    ws.onmessage = e => {
+      const msg = JSON.parse(e.data);
+
+      if (msg.type === "playerJoined") {
+        const li = document.createElement("li");
+        li.textContent = "Player " + msg.playerId;
+        playersEl.appendChild(li);
+      }
+
+      if (msg.type === "playerList") {
+        playersEl.innerHTML = "";
+        msg.players.forEach(id => {
+          const li = document.createElement("li");
+          li.textContent = "Player " + id;
+          playersEl.appendChild(li);
+        });
+      }
+    };
+
+    document.getElementById("leaveBtn").onclick = () => {
+      ws.send(JSON.stringify({ type: "leaveRoom", roomId: Number(roomId) }));
+      location.href = "index.html";
+    };
+  </script>
+</body>
+</html>
