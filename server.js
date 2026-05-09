@@ -29,26 +29,6 @@ function broadcastToRoom(roomId, obj) {
   }
 }
 
-// --- プレイヤー一覧 ---
-if (msg.type === "joinRoom") {
-  const room = rooms[msg.roomId];
-  if (!room) return;
-
-  room.players.push(id);
-
-  // 新規参加者にプレイヤー一覧を送る
-  ws.send(JSON.stringify({
-    type: "playerList",
-    players: room.players
-  }));
-
-  // 他のプレイヤーに通知
-  broadcastToRoom(msg.roomId, {
-    type: "playerJoined",
-    playerId: id
-  });
-}
-
 // --- WebSocket 接続 ---
 wss.on("connection", ws => {
   const id = nextPlayerId++;
@@ -80,17 +60,32 @@ wss.on("connection", ws => {
 
       room.players.push(id);
 
+      // 新規参加者にプレイヤー一覧を送る
+      ws.send(JSON.stringify({
+        type: "playerList",
+        players: room.players
+      }));
+
+      // 他のプレイヤーに通知
       broadcastToRoom(msg.roomId, {
         type: "playerJoined",
         playerId: id
       });
     }
-  });
 
-  ws.on("close", () => {
-    players.delete(id);
+    // 部屋退出
+    if (msg.type === "leaveRoom") {
+      const room = rooms[msg.roomId];
+      if (!room) return;
+
+      room.players = room.players.filter(pid => pid !== id);
+
+      broadcastToRoom(msg.roomId, {
+        type: "playerLeft",
+        playerId: id
+      });
+    }
   });
-});
 
 // --- Render 用ポート ---
 const PORT = process.env.PORT || 3000;
