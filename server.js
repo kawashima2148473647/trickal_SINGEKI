@@ -14,17 +14,16 @@ const players = new Map();
 let nextPlayerId = 1;
 
 // --- 部屋管理 ---
-const rooms = {}; // roomId → { players: [] }
-let nextRoomId = 1;
+const rooms = {}; // roomName → { players: [{ id, name }] }
 
 // --- 部屋にメッセージを送る ---
-function broadcastToRoom(roomId, obj) {
+function broadcastToRoom(roomName, obj) {
   const data = JSON.stringify(obj);
-  const room = rooms[roomId];
+  const room = rooms[roomName];
   if (!room) return;
 
-  for (const pid of room.players) {
-    const ws = players.get(pid);
+  for (const p of room.players) {
+    const ws = players.get(p.id);
     if (ws) ws.send(data);
   }
 }
@@ -39,11 +38,10 @@ wss.on("connection", ws => {
   ws.on("message", raw => {
     const msg = JSON.parse(raw);
 
-    // 部屋作成
+    // --- 部屋作成 ---
     if (msg.type === "createRoom") {
       const roomName = msg.roomName;
 
-      // すでに同名の部屋があればエラー
       if (rooms[roomName]) {
         ws.send(JSON.stringify({ type: "error", message: "その部屋名は使用されています" }));
         return;
@@ -55,46 +53,52 @@ wss.on("connection", ws => {
         type: "roomCreated",
         roomName
       }));
-    }
 
-    // 部屋参加
-    const room = rooms[msg.roomName];
-    if (!room) {
-      ws.send(JSON.stringify({ type: "error", message: "部屋が存在しません" }));
       return;
     }
 
-    room.players.push({ id, name: msg.name });
+    // --- 部屋参加 ---
+    if (msg.type === "joinRoom") {
+      const room = rooms[msg.roomName];
+      if (!room) {
+        ws.send(JSON.stringify({ type: "error", message: "部屋が存在しません" }));
+        return;
+      }
 
-    ws.send(JSON.stringify({
-      type: "playerList",
-      players: room.players
-    }));
+      room.players.push({ id, name: msg.name });
 
-    broadcastToRoom(msg.roomName, {
-      type: "playerJoined",
-      name: msg.name
-    });
-  }
+      ws.send(JSON.stringify({
+        type: "playerList",
+        players: room.players
+      }));
 
-    // 部屋退出
+      broadcastToRoom(msg.roomName, {
+        type: "playerJoined",
+        name: msg.name
+      });
+
+      return;
+    }
+
+    // --- 部屋退出 ---
     if (msg.type === "leaveRoom") {
-      const room = rooms[msg.roomId];
+      const room = rooms[msg.roomName];
       if (!room) return;
 
-      room.players = room.players.filter(pid => pid !== id);
+      room.players = room.players.filter(p => p.id !== id);
 
-      broadcastToRoom(msg.roomId, {
+      broadcastToRoom(msg.roomName, {
         type: "playerLeft",
         playerId: id
       });
+
+      return;
     }
   });
 
   ws.on("close", () => {
     players.delete(id);
   });
-
 });
 
 // --- Render 用ポート ---

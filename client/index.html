@@ -40,7 +40,7 @@
       const msg = JSON.parse(e.data);
 
     if (msg.type === "roomCreated") {
-      location.href = `room.html?roomName=${msg.roomName}`;
+      location.href = `room.html?roomName=${encodeURIComponent(msg.roomName)}`;
     }
 
       if (msg.type === "playerJoined") {
@@ -52,12 +52,17 @@
       const playerName = nameInput.value.trim();
       const roomName = document.getElementById("roomNameInput").value.trim();
 
+      if (!playerName) {
+        alert("名前を入力してください");
+        return;
+      }
+
       if (!roomName) {
         alert("部屋名を入力してください");
         return;
       }
 
-      localStorage.setItem("playerName", name);
+      localStorage.setItem("playerName", playerName);
 
       ws.send(JSON.stringify({
         type: "createRoom",
@@ -66,9 +71,22 @@
     };
 
     joinBtn.onclick = () => {
-      localStorage.setItem("playerName", nameInput.value.trim());
-      const roomId = Number(document.getElementById("roomIdInput").value);
-      location.href = `room.html?roomId=${roomId}`;
+      const playerName = nameInput.value.trim();
+      const roomName = document.getElementById("roomIdInput").value.trim();
+
+      if (!playerName) {
+        alert("名前を入力してください");
+        return;
+      }
+
+      if (!roomName) {
+        alert("部屋名を入力してください");
+        return;
+      }
+
+      localStorage.setItem("playerName", playerName);
+
+      location.href = `room.html?roomName=${encodeURIComponent(roomName)}`;
     };
   </script>
 </body>

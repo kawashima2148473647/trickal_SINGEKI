@@ -55,7 +55,7 @@
     };
 
     document.getElementById("leaveBtn").onclick = () => {
-      ws.send(JSON.stringify({ type: "leaveRoom", roomId: Number(roomId) }));
+      ws.send(JSON.stringify({ type: "leaveRoom", roomName }));
       location.href = "index.html";
     };
   </script>
