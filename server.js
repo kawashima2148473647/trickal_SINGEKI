@@ -2,105 +2,28 @@
 const http = require("http");
 const WebSocket = require("ws");
 
+// --- HTTP サーバー（Render がポートを検出するために必要） ---
 const server = http.createServer((req, res) => {
   res.writeHead(200, { "Content-Type": "text/plain" });
   res.end("WebSocket server is running");
 });
 
+// --- WebSocket サーバー ---
 const wss = new WebSocket.Server({ server });
 
-// --- プレイヤー管理 ---
-const players = new Map();
-let nextPlayerId = 1;
-
-// --- 部屋管理 ---
-const rooms = {}; // roomName → { players: [{ id, name }] }
-
-// --- 部屋にメッセージを送る ---
-function broadcastToRoom(roomName, obj) {
-  const data = JSON.stringify(obj);
-  const room = rooms[roomName];
-  if (!room) return;
-
-  for (const p of room.players) {
-    const ws = players.get(p.id);
-    if (ws) ws.send(data);
-  }
-}
-
-// --- WebSocket 接続 ---
+// --- 接続処理 ---
 wss.on("connection", ws => {
-  const id = nextPlayerId++;
-  players.set(id, ws);
+  console.log("Client connected");
 
-  ws.send(JSON.stringify({ type: "welcome", id }));
+  ws.send("接続成功！");
 
-  ws.on("message", raw => {
-    const msg = JSON.parse(raw);
-
-    // --- 部屋作成 ---
-    if (msg.type === "createRoom") {
-      const roomName = msg.roomName;
-
-      if (rooms[roomName]) {
-        ws.send(JSON.stringify({ type: "error", message: "その部屋名は使用されています" }));
-        return;
-      }
-
-      rooms[roomName] = { players: [] };
-
-      ws.send(JSON.stringify({
-        type: "roomCreated",
-        roomName
-      }));
-
-      return;
-    }
-
-    // --- 部屋参加 ---
-    if (msg.type === "joinRoom") {
-      const room = rooms[msg.roomName];
-      if (!room) {
-        ws.send(JSON.stringify({ type: "error", message: "部屋が存在しません" }));
-        return;
-      }
-
-      // 重複参加を防ぐ
-      if (!room.players.some(p => p.id === id)) {
-        room.players.push({ id, name: msg.name });
-      }
-
-      ws.send(JSON.stringify({
-        type: "playerList",
-        players: room.players
-      }));
-
-      broadcastToRoom(msg.roomName, {
-        type: "playerList",
-        name: msg.name
-      });
-
-      return;
-    }
-
-    // --- 部屋退出 ---
-    if (msg.type === "leaveRoom") {
-      const room = rooms[msg.roomName];
-      if (!room) return;
-
-      room.players = room.players.filter(p => p.id !== id);
-
-      broadcastToRoom(msg.roomName, {
-        type: "playerList",
-        players: room.players
-      });
-
-      return;
-    }
+  ws.on("message", msg => {
+    console.log("受信:", msg);
+    ws.send("echo: " + msg);
   });
 
   ws.on("close", () => {
-    players.delete(id);
+    console.log("Client disconnected");
   });
 });
 

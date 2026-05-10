@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Lobby</title>
+</head>
+<body>
+  <h1>ロビー</h1>
+</body>
+<script>
+  const ws = new WebSocket("wss://あなたのサービス名.onrender.com");
+
+  ws.onopen = () => {
+    console.log("接続成功");
+    ws.send("hello server");
+  };
+
+  ws.onmessage = (e) => {
+    console.log("サーバーから:", e.data);
+  };
+</script>
+</html>
