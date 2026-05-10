@@ -12,7 +12,7 @@
     const playerName = localStorage.getItem("playerName");
     const playersEl = document.getElementById("players");
 
-    const ws = new WebSocket("wss://trickal-singeki-1.onrender.com/");
+    const ws = new WebSocket("wss://trickal-singeki.onrender.com/");
 
     ws.onopen = () => {
       ws.send(JSON.stringify({
