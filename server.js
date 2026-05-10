@@ -20,28 +20,25 @@ wss.on("connection", ws => {
     if (msg.type === "join") {
       players.push({ name: msg.name, ws });
 
-      // 全員に最新一覧を送信
-      broadcast({
-        type: "playerList",
-        players: players.map(p => ({ name: p.name }))
-      });
+      sendPlayerList();
     }
   });
 
   ws.on("close", () => {
-    // 切断したプレイヤーを削除
     players = players.filter(p => p.ws !== ws);
-
-    broadcast({
-      type: "playerList",
-      players: players.map(p => ({ name: p.name }))
-    });
+    sendPlayerList();
   });
 });
 
-// --- 全員に送信 ---
-function broadcast(obj) {
-  const data = JSON.stringify(obj);
+// --- 全員に一覧を送る ---
+function sendPlayerList() {
+  const list = players.map(p => ({ name: p.name }));
+
+  const data = JSON.stringify({
+    type: "playerList",
+    players: list
+  });
+
   wss.clients.forEach(client => {
     if (client.readyState === WebSocket.OPEN) {
       client.send(data);
