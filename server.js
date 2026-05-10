@@ -16,14 +16,14 @@ wss.on("connection", ws => {
   ws.on("message", data => {
     const msg = JSON.parse(data);
 
-    // --- join ---
+    // --- join を受け取る ---
     if (msg.type === "join") {
-      players.push({ name: msg.name });
+      players.push({ name: msg.name, ws });
 
       // 全員に最新一覧を送信
       broadcast({
         type: "playerList",
-        players
+        players: players.map(p => ({ name: p.name }))
       });
     }
   });
@@ -34,7 +34,7 @@ wss.on("connection", ws => {
 
     broadcast({
       type: "playerList",
-      players
+      players: players.map(p => ({ name: p.name }))
     });
   });
 });
