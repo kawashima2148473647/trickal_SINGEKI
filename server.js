@@ -2,32 +2,53 @@
 const http = require("http");
 const WebSocket = require("ws");
 
-// --- HTTP サーバー（Render がポートを検出するために必要） ---
 const server = http.createServer((req, res) => {
   res.writeHead(200, { "Content-Type": "text/plain" });
   res.end("WebSocket server is running");
 });
 
-// --- WebSocket サーバー ---
 const wss = new WebSocket.Server({ server });
 
-// --- 接続処理 ---
+// --- プレイヤー一覧 ---
+let players = [];
+
 wss.on("connection", ws => {
-  console.log("Client connected");
+  ws.on("message", data => {
+    const msg = JSON.parse(data);
 
-  ws.send("接続成功！");
+    // --- join ---
+    if (msg.type === "join") {
+      players.push({ name: msg.name });
 
-  ws.on("message", msg => {
-    console.log("受信:", msg);
-    ws.send("echo: " + msg);
+      // 全員に最新一覧を送信
+      broadcast({
+        type: "playerList",
+        players
+      });
+    }
   });
 
   ws.on("close", () => {
-    console.log("Client disconnected");
+    // 切断したプレイヤーを削除
+    players = players.filter(p => p.ws !== ws);
+
+    broadcast({
+      type: "playerList",
+      players
+    });
   });
 });
 
-// --- Render 用ポート ---
+// --- 全員に送信 ---
+function broadcast(obj) {
+  const data = JSON.stringify(obj);
+  wss.clients.forEach(client => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(data);
+    }
+  });
+}
+
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log("Server running on port " + PORT);

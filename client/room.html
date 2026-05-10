@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Room</title>
+</head>
+<body>
+  <h1>ユーザー一覧</h1>
+  <ul id="players"></ul>
+
+  <script>
+    const playerName = localStorage.getItem("playerName");
+    const playersEl = document.getElementById("players");
+
+    const ws = new WebSocket("wss://あなたのサービス名.onrender.com");
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({
+        type: "join",
+        name: playerName
+      }));
+    };
+
+    ws.onmessage = (e) => {
+      const msg = JSON.parse(e.data);
+
+      // 全員の一覧を受信
+      if (msg.type === "playerList") {
+        playersEl.innerHTML = "";
+        msg.players.forEach(p => {
+          const li = document.createElement("li");
+          li.textContent = p.name;
+          playersEl.appendChild(li);
+        });
+      }
+    };
+  </script>
+</body>
+</html>
