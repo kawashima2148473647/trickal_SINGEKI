@@ -1,99 +1,182 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>Game</title>
+  <title>カードゲーム - プレイ</title>
   <style>
-    #hand { margin-top: 20px; }
-    .card { display:inline-block; padding:8px 12px; margin:4px; border:1px solid #333; cursor:pointer; }
-    #table { margin-top: 20px; }
+    .board {
+      display: flex;
+      gap: 8px;
+      margin: 8px 0;
+    }
+    .cell {
+      border: 1px solid #333;
+      padding: 4px 8px;
+      min-width: 40px;
+      text-align: center;
+    }
+    .me {
+      font-weight: bold;
+      color: blue;
+    }
+    .hand button {
+      margin-right: 4px;
+    }
   </style>
 </head>
 <body>
-  <h1>ゲーム画面</h1>
-  <div>あなた: <span id="me"></span></div>
-  <div>ターン: <span id="turn"></span></div>
-  <div>デッキ残り: <span id="deckCount"></span></div>
+  <h1>カードゲーム</h1>
 
-  <h2>場</h2>
-  <div id="table"></div>
+  <div>
+    現在のターンプレイヤー：<span id="currentPlayer"></span><br>
+    現在のターン数：<span id="turnNumber"></span>
+  </div>
 
-  <h2>手札</h2>
-  <div id="hand"></div>
+  <h2>ボード</h2>
+  <div id="board" class="board"></div>
+
+  <h2>プレイヤー情報</h2>
+  <ul id="playerStatus"></ul>
+
+  <h2>あなたの手札</h2>
+  <div id="hand" class="hand"></div>
+
+  <button id="endTurnBtn">ターン終了</button>
+
+  <div id="result" style="margin-top:20px; font-size:1.2em; color:red;"></div>
+  <button id="backToRoomBtn" style="display:none;">ルームに戻る</button>
 
   <script>
-    const playerName = localStorage.getItem("playerName");
-    document.getElementById("me").textContent = playerName || "unknown";
+    const params = new URLSearchParams(location.search);
+    const myName = params.get('name');
+    const myId = params.get('id');
 
-    const handEl = document.getElementById("hand");
-    const tableEl = document.getElementById("table");
-    const turnEl = document.getElementById("turn");
-    const deckCountEl = document.getElementById("deckCount");
+    if (!myName || !myId) {
+      alert('情報が不足しています。ルームに戻ります。');
+      location.href = 'index.html';
+    }
 
-    const ws = new WebSocket("wss://trickal-singeki.onrender.com/");
+    const ws = new WebSocket(`ws://${location.host}`);
 
-    ws.onopen = () => {
-      console.log("game WS open, rejoin:", playerName);
-      ws.send(JSON.stringify({ type: "rejoin", name: playerName }));
-    };
+    let gameState = null;
 
-    let myHand = [];
+    ws.addEventListener('open', () => {
+      ws.send(JSON.stringify({
+        type: 'join_game',
+        id: myId,
+        name: myName
+      }));
+    });
 
-    ws.onmessage = (e) => {
-      console.log("game recv:", e.data);
-      const msg = JSON.parse(e.data);
+    ws.addEventListener('message', (event) => {
+      const msg = JSON.parse(event.data);
 
-      if (msg.type === "deal") {
-        // サーバは個別に hand を送る
-        if (msg.hand) {
-          myHand = msg.hand;
-          renderHand();
+      if (msg.type === 'game_state') {
+        gameState = msg.state;
+        renderGame();
+      }
+
+      if (msg.type === 'game_over') {
+        gameState = msg.state;
+        renderGame();
+        const resultDiv = document.getElementById('result');
+        resultDiv.textContent = `勝者：${msg.winner.name}`;
+        document.getElementById('backToRoomBtn').style.display = 'inline-block';
+      }
+    });
+
+    function renderGame() {
+      if (!gameState) return;
+
+      document.getElementById('currentPlayer').textContent =
+        gameState.players[gameState.turnIndex]?.name || '';
+      document.getElementById('turnNumber').textContent = gameState.turnNumber;
+
+      renderBoard();
+      renderPlayers();
+      renderHand();
+    }
+
+    function renderBoard() {
+      const boardDiv = document.getElementById('board');
+      boardDiv.innerHTML = '';
+
+      const labels = ['スタート', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'ゴール'];
+
+      labels.forEach((label, index) => {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        cell.textContent = label;
+
+        const occupants = gameState.players
+          .filter(p => p.position === index)
+          .map(p => p.name);
+
+        if (occupants.length > 0) {
+          const span = document.createElement('div');
+          span.textContent = occupants.join(',');
+          cell.appendChild(span);
         }
-        if (typeof msg.deckCount !== "undefined") deckCountEl.textContent = msg.deckCount;
-      }
 
-      if (msg.type === "gameState") {
-        turnEl.textContent = msg.turn || "—";
-        if (typeof msg.deckCount !== "undefined") deckCountEl.textContent = msg.deckCount;
-        renderTable(msg.table || []);
-      }
+        boardDiv.appendChild(cell);
+      });
+    }
 
-      if (msg.type === "invalid") {
-        alert("操作エラー: " + msg.reason);
-      }
-    };
+    function renderPlayers() {
+      const ul = document.getElementById('playerStatus');
+      ul.innerHTML = '';
+      gameState.players.forEach((p, idx) => {
+        const li = document.createElement('li');
+        li.textContent = `${p.name} - スコア: ${p.score}`;
+        if (idx === gameState.turnIndex) {
+          li.textContent += '（ターン中）';
+        }
+        if (p.id === myId) {
+          li.classList.add('me');
+        }
+        ul.appendChild(li);
+      });
+    }
 
     function renderHand() {
-      handEl.innerHTML = "";
-      myHand.forEach(card => {
-        const d = document.createElement("div");
-        d.className = "card";
-        d.textContent = card;
-        d.onclick = () => {
-          // クライアント側でターンチェック
-          if (turnEl.textContent !== playerName) {
-            alert("今はあなたのターンではありません");
-            return;
-          }
-          if (!confirm("このカードを出しますか？ " + card)) return;
-          console.log("send playCard:", { from: playerName, card });
-          ws.send(JSON.stringify({ type: "playCard", from: playerName, card }));
-        };
-        handEl.appendChild(d);
+      const handDiv = document.getElementById('hand');
+      handDiv.innerHTML = '';
+
+      const me = gameState.players.find(p => p.id === myId);
+      if (!me) return;
+
+      const isMyTurn = gameState.players[gameState.turnIndex]?.id === myId;
+      me.hand.forEach((card, idx) => {
+        const btn = document.createElement('button');
+        btn.textContent = card;
+        btn.disabled = !isMyTurn || gameState.isFinished;
+        btn.addEventListener('click', () => {
+          ws.send(JSON.stringify({
+            type: 'play_card',
+            id: myId,
+            cardIndex: idx
+          }));
+        });
+        handDiv.appendChild(btn);
       });
+
+      document.getElementById('endTurnBtn').disabled = !isMyTurn || gameState.isFinished;
     }
 
-    function renderTable(table) {
-      tableEl.innerHTML = "";
-      table.forEach(t => {
-        const d = document.createElement("div");
-        d.textContent = `${t.player}: ${t.card}`;
-        tableEl.appendChild(d);
-      });
-    }
+    document.getElementById('endTurnBtn').addEventListener('click', () => {
+      ws.send(JSON.stringify({
+        type: 'end_turn',
+        id: myId
+      }));
+    });
 
-    ws.onerror = (err) => console.error("WS error", err);
-    ws.onclose = () => console.log("WS closed");
+    document.getElementById('backToRoomBtn').addEventListener('click', () => {
+      location.href = `room.html?name=${encodeURIComponent(myName)}`;
+    });
+
+    window.addEventListener('beforeunload', () => {
+      ws.send(JSON.stringify({ type: 'leave_game', id: myId }));
+    });
   </script>
 </body>
 </html>

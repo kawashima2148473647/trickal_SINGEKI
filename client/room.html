@@ -1,55 +1,75 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>Room</title>
+  <title>カードゲーム - ルーム</title>
 </head>
 <body>
-  <h1>ユーザー一覧</h1>
-  <ul id="players"></ul>
-  <button id="startBtn" style="display:none">ゲーム開始</button>
+  <h1>ルーム</h1>
+  <div>
+    あなたの名前：<span id="myName"></span>
+  </div>
+  <h2>参加者一覧</h2>
+  <ul id="playerList"></ul>
+
+  <button id="startGameBtn">ゲーム開始</button>
 
   <script>
-    const playerName = localStorage.getItem("playerName");
-    const playersEl = document.getElementById("players");
-    const startBtn = document.getElementById("startBtn");
+    const params = new URLSearchParams(location.search);
+    const myName = params.get('name');
+    if (!myName) {
+      alert('名前情報がありません。トップに戻ります。');
+      location.href = 'index.html';
+    }
+    document.getElementById('myName').textContent = myName;
 
-    const ws = new WebSocket("wss://trickal-singeki.onrender.com/");
+    const ws = new WebSocket(`ws://${location.host}`);
 
-    ws.onopen = () => {
-      console.log("WS open, sending join:", playerName);
-      ws.send(JSON.stringify({ type: "join", name: playerName }));
-    };
+    let myId = null;
 
-    ws.onmessage = (e) => {
-      console.log("recv:", e.data);
-      const msg = JSON.parse(e.data);
+    ws.addEventListener('open', () => {
+      ws.send(JSON.stringify({
+        type: 'join_room',
+        name: myName
+      }));
+    });
 
-      if (msg.type === "playerList") {
-        playersEl.innerHTML = "";
-        msg.players.forEach(p => {
-          const li = document.createElement("li");
-          li.textContent = p.name;
-          playersEl.appendChild(li);
-        });
-        // 自分がいるなら開始ボタンを表示（簡易: 誰でも開始可）
-        startBtn.style.display = "inline-block";
+    ws.addEventListener('message', (event) => {
+      const msg = JSON.parse(event.data);
+
+      if (msg.type === 'room_state') {
+        renderPlayers(msg.players);
       }
 
-      if (msg.type === "invalid") {
-        alert("サーバエラー: " + msg.reason);
+      if (msg.type === 'assign_id') {
+        myId = msg.id;
       }
-    };
 
-    startBtn.onclick = () => {
-      ws.send(JSON.stringify({ type: "startGame", by: playerName }));
-      // サーバが deal を送ってくるので、それを受け取ったら game.html に遷移する
-      // ここでは遷移を少し遅らせて、deal を受け取る余地を与える
-      setTimeout(() => { location.href = "game.html"; }, 300);
-    };
+      if (msg.type === 'game_start') {
+        // 全員game.htmlへ遷移
+        location.href = `game.html?name=${encodeURIComponent(myName)}&id=${encodeURIComponent(myId)}`;
+      }
+    });
 
-    ws.onerror = (err) => console.error("WS error", err);
-    ws.onclose = () => console.log("WS closed");
+    function renderPlayers(players) {
+      const ul = document.getElementById('playerList');
+      ul.innerHTML = '';
+      players.forEach(p => {
+        const li = document.createElement('li');
+        li.textContent = p.name;
+        ul.appendChild(li);
+      });
+    }
+
+    document.getElementById('startGameBtn').addEventListener('click', () => {
+      ws.send(JSON.stringify({
+        type: 'request_start_game'
+      }));
+    });
+
+    window.addEventListener('beforeunload', () => {
+      ws.send(JSON.stringify({ type: 'leave_room' }));
+    });
   </script>
 </body>
 </html>

@@ -1,29 +1,27 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>Lobby</title>
+  <title>カードゲーム - 入室</title>
 </head>
 <body>
-  <h1>ロビー</h1>
-
-  <input id="playerName" placeholder="名前を入力">
+  <h1>カードゲーム</h1>
+  <label>
+    名前：
+    <input type="text" id="nameInput" />
+  </label>
   <button id="enterBtn">入室</button>
 
   <script>
-    document.getElementById("enterBtn").onclick = () => {
-      const name = document.getElementById("playerName").value.trim();
+    document.getElementById('enterBtn').addEventListener('click', () => {
+      const name = document.getElementById('nameInput').value.trim();
       if (!name) {
-        alert("名前を入力してください");
+        alert('名前を入力してください');
         return;
       }
-
-      // 名前を保存
-      localStorage.setItem("playerName", name);
-
-      // 部屋ページへ
-      location.href = "room.html";
-    };
+      // 名前をクエリに付けてroom.htmlへ
+      location.href = `room.html?name=${encodeURIComponent(name)}`;
+    });
   </script>
 </body>
 </html>

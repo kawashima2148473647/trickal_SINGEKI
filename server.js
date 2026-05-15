@@ -1,200 +1,209 @@
-// 既存の先頭部分はそのまま
-const http = require("http");
-const WebSocket = require("ws");
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
+const WebSocket = require('ws');
 
 const server = http.createServer((req, res) => {
-  res.writeHead(200, { "Content-Type": "text/plain" });
-  res.end("WebSocket server is running");
+  let filePath = req.url.split('?')[0];
+  if (filePath === '/' || filePath === '') {
+    filePath = '/index.html';
+  }
+
+  const ext = path.extname(filePath);
+  const fullPath = path.join(__dirname, filePath);
+
+  fs.readFile(fullPath, (err, data) => {
+    if (err) {
+      res.writeHead(404);
+      res.end('Not found');
+      return;
+    }
+    let contentType = 'text/html';
+    if (ext === '.js') contentType = 'text/javascript';
+    if (ext === '.css') contentType = 'text/css';
+    res.writeHead(200, { 'Content-Type': contentType });
+    res.end(data);
+  });
 });
 
 const wss = new WebSocket.Server({ server });
 
-// --- ルーム管理を追加 ---
-const rooms = {
-  default: {
-    players: [], // { name, ws }
-    deck: [],
-    hands: {},   // name -> [cards]
-    table: [],
-    turnIndex: 0
-  }
-};
+let nextId = 1;
+const clients = new Map(); // ws -> {id, name}
+let roomPlayers = [];      // {id, name}
+let gameState = null;      // {players:[{id,name,position,score,hand}], turnIndex, turnNumber, isFinished}
 
-// --- ユーティリティ ---
-function createDeck() {
-  // 簡易デッキ（例: 1..52 を文字列で表現）
-  const deck = [];
-  for (let i = 1; i <= 52; i++) deck.push(String(i));
-  return deck;
+function broadcast(obj) {
+  const msg = JSON.stringify(obj);
+  for (const ws of wss.clients) {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(msg);
+    }
+  }
 }
 
-function broadcastRoom(roomId, msg) {
-  const room = rooms[roomId];
-  if (!room) return;
-  room.players.forEach(p => {
-    if (p.ws && p.ws.readyState === WebSocket.OPEN) {
-      p.ws.send(JSON.stringify(msg));
-    }
+function broadcastRoomState() {
+  broadcast({
+    type: 'room_state',
+    players: roomPlayers
   });
 }
 
-function sendToPlayer(ws, msg) {
-  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
+function initGame() {
+  gameState = {
+    players: roomPlayers.map(p => ({
+      id: p.id,
+      name: p.name,
+      position: 0, // 0:スタート, 1-9, 10:ゴール
+      score: 0,
+      hand: drawHand()
+    })),
+    turnIndex: 0,
+    turnNumber: 1,
+    isFinished: false
+  };
+  // 最初のターンプレイヤーをランダムに
+  if (gameState.players.length > 0) {
+    gameState.turnIndex = Math.floor(Math.random() * gameState.players.length);
+  }
 }
 
-// --- プレイヤー一覧 ---
-// players 配列は legacy のまま残すが、rooms.default.players を主に使う
-let players = [];
+function drawHand() {
+  const hand = [];
+  for (let i = 0; i < 5; i++) {
+    hand.push(1 + Math.floor(Math.random() * 4)); // 1~4
+  }
+  return hand;
+}
 
-wss.on("connection", ws => {
-  ws.on("message", data => {
+function sendGameState() {
+  broadcast({
+    type: 'game_state',
+    state: gameState
+  });
+}
+
+function handlePlayCard(playerId, cardIndex) {
+  if (!gameState || gameState.isFinished) return;
+  const current = gameState.players[gameState.turnIndex];
+  if (!current || current.id !== playerId) return;
+
+  if (cardIndex < 0 || cardIndex >= current.hand.length) return;
+
+  const value = current.hand[cardIndex];
+  current.hand.splice(cardIndex, 1);
+
+  // 位置更新
+  const boardSize = 11; // 0:スタート,1-9,10:ゴール
+  let pos = current.position;
+  for (let i = 0; i < value; i++) {
+    pos++;
+    if (pos >= boardSize) {
+      pos = 0; // スタートに戻る
+      current.score += 1; // ゴール通過で得点
+    }
+  }
+  current.position = pos;
+
+  // 勝利判定
+  if (current.score >= 3) {
+    gameState.isFinished = true;
+    broadcast({
+      type: 'game_over',
+      winner: { id: current.id, name: current.name },
+      state: gameState
+    });
+    return;
+  }
+
+  sendGameState();
+}
+
+function handleEndTurn(playerId) {
+  if (!gameState || gameState.isFinished) return;
+  const current = gameState.players[gameState.turnIndex];
+  if (!current || current.id !== playerId) return;
+
+  // 手札を捨てて新しく5枚
+  current.hand = drawHand();
+
+  // 次のプレイヤーへ
+  gameState.turnIndex = (gameState.turnIndex + 1) % gameState.players.length;
+  gameState.turnNumber += 1;
+
+  sendGameState();
+}
+
+wss.on('connection', (ws) => {
+  const id = String(nextId++);
+  clients.set(ws, { id, name: null });
+
+  ws.send(JSON.stringify({ type: 'assign_id', id }));
+
+  ws.on('message', (data) => {
     let msg;
     try {
-      msg = JSON.parse(data);
-    } catch (e) {
-      console.error("Invalid JSON:", data);
+      msg = JSON.parse(data.toString());
+    } catch {
       return;
     }
 
-    // join を受け取る
-    if (msg.type === "join" && msg.name) {
-      // 既存の players と rooms の両方に登録
-      players.push({ name: msg.name, ws });
-      const room = rooms.default;
-      // 既に同名があれば差し替え
-      const existing = room.players.find(p => p.name === msg.name);
-      if (existing) {
-        existing.ws = ws;
-      } else {
-        room.players.push({ name: msg.name, ws });
+    if (msg.type === 'join_room') {
+      const client = clients.get(ws);
+      client.name = msg.name;
+      if (!roomPlayers.find(p => p.id === client.id)) {
+        roomPlayers.push({ id: client.id, name: client.name });
       }
-
-      // 既存の playerList 送信（簡易）
-      sendPlayerList();
+      broadcastRoomState();
     }
 
-    // rejoin: ページ遷移後に状態を再送してほしいとき
-    if (msg.type === "rejoin" && msg.name) {
-      const room = rooms.default;
-      const p = room.players.find(x => x.name === msg.name);
-      if (p) p.ws = ws; // ws を差し替え
-      // 自分の手札を個別送信（あれば）
-      if (room.hands[msg.name]) {
-        sendToPlayer(ws, { type: "deal", hand: room.hands[msg.name], deckCount: room.deck.length });
+    if (msg.type === 'leave_room') {
+      const client = clients.get(ws);
+      roomPlayers = roomPlayers.filter(p => p.id !== client.id);
+      broadcastRoomState();
+    }
+
+    if (msg.type === 'request_start_game') {
+      if (!roomPlayers.length) return;
+      initGame();
+      broadcast({ type: 'game_start' });
+      sendGameState();
+    }
+
+    if (msg.type === 'join_game') {
+      // 特に何もしなくてもOK（状態はbroadcastで送る）
+      if (gameState) {
+        ws.send(JSON.stringify({
+          type: 'game_state',
+          state: gameState
+        }));
       }
-      // 全体の gameState も送る
-      sendGameState(room);
-      sendPlayerList();
     }
 
-    // startGame を受け取る（誰でも押せる簡易実装）
-    if (msg.type === "startGame") {
-      startGame("default");
+    if (msg.type === 'leave_game') {
+      // 今回は特に処理しない（簡易実装）
     }
 
-    // playCard を受け取る
-    if (msg.type === "playCard" && msg.from && msg.card) {
-      handlePlay("default", msg.from, msg.card);
+    if (msg.type === 'play_card') {
+      handlePlayCard(msg.id, msg.cardIndex);
+    }
+
+    if (msg.type === 'end_turn') {
+      handleEndTurn(msg.id);
     }
   });
 
-  ws.on("close", () => {
-    players = players.filter(p => p.ws !== ws);
-    // rooms 側もクリーンアップ
-    const room = rooms.default;
-    room.players = room.players.filter(p => p.ws !== ws);
-    sendPlayerList();
+  ws.on('close', () => {
+    const client = clients.get(ws);
+    if (client) {
+      roomPlayers = roomPlayers.filter(p => p.id !== client.id);
+      broadcastRoomState();
+    }
+    clients.delete(ws);
   });
 });
 
-// --- playerList を全員に送る ---
-function sendPlayerList() {
-  const list = rooms.default.players.map(p => ({ name: p.name }));
-  const data = JSON.stringify({ type: "playerList", players: list });
-  wss.clients.forEach(client => {
-    if (client.readyState === WebSocket.OPEN) client.send(data);
-  });
-}
-
-// --- ゲーム開始処理 ---
-function startGame(roomId = "default") {
-  if (!room.players || room.players.length === 0) {
-    console.warn("startGame aborted: no players");
-    return;
-  }
-  room.turnIndex = room.turnIndex % room.players.length;
-
-  const room = rooms[roomId];
-  room.deck = createDeck().sort(() => Math.random() - 0.5);
-  room.table = [];
-  room.hands = {};
-  room.turnIndex = 0;
-
-  const HAND_SIZE = 5; // 例: 5枚配る
-  room.players.forEach((p) => {
-    room.hands[p.name] = room.deck.splice(0, HAND_SIZE);
-    // 各プレイヤーに自分の手札だけ送信
-    sendToPlayer(p.ws, { type: "deal", hand: room.hands[p.name], deckCount: room.deck.length });
-  });
-
-  // 全体に gameState を送る（手札は含めない）
-  sendGameState(room);
-}
-
-// --- gameState を全員に送る ---
-function sendGameState(room) {
-  // 安全に turn を決める
-  const turnName = (room.players && room.players.length > 0 && room.players[room.turnIndex])
-    ? room.players[room.turnIndex].name
-    : null;
-
-  const state = {
-    type: "gameState",
-    turn: room.players[room.turnIndex] ? room.players[room.turnIndex].name : null,
-    table: room.table,
-    handsCount: Object.fromEntries(room.players.map(p => [p.name, (room.hands[p.name] || []).length])),
-    deckCount: room.deck.length
-  };
-  broadcastRoom("default", state);
-}
-
-// --- プレイ処理 ---
-function handlePlay(roomId, playerName, card) {
-  const room = rooms[roomId];
-  const current = room.players[room.turnIndex];
-  if (!current || current.name !== playerName) {
-    // 該当プレイヤーにエラーを返す
-    const p = room.players.find(x => x.name === playerName);
-    if (p) sendToPlayer(p.ws, { type: "invalid", reason: "not your turn" });
-    return;
-  }
-
-  const hand = room.hands[playerName] || [];
-  const idx = hand.indexOf(card);
-  if (idx === -1) {
-    const p = room.players.find(x => x.name === playerName);
-    if (p) sendToPlayer(p.ws, { type: "invalid", reason: "card not in hand" });
-    return;
-  }
-
-  // カードを場に出す
-  hand.splice(idx, 1);
-  room.table.push({ player: playerName, card });
-  // ターンを進める
-  room.turnIndex = (room.turnIndex + 1) % room.players.length;
-
-  // 更新を全員へ送る
-  // 各プレイヤーには自分の手札を個別送信
-  room.players.forEach(p => {
-    sendToPlayer(p.ws, { type: "deal", hand: room.hands[p.name], deckCount: room.deck.length });
-  });
-  sendGameState(room);
-
-  room.turnIndex = room.players.length > 0 ? room.turnIndex % room.players.length : 0;
-
-}
-
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log("Server running on port " + PORT);
+  console.log('Server listening on port', PORT);
 });
