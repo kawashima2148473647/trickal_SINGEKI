@@ -118,6 +118,12 @@ function sendPlayerList() {
 
 // --- ゲーム開始処理 ---
 function startGame(roomId = "default") {
+  if (!room.players || room.players.length === 0) {
+    console.warn("startGame aborted: no players");
+    return;
+  }
+  room.turnIndex = room.turnIndex % room.players.length;
+
   const room = rooms[roomId];
   room.deck = createDeck().sort(() => Math.random() - 0.5);
   room.table = [];
@@ -137,6 +143,11 @@ function startGame(roomId = "default") {
 
 // --- gameState を全員に送る ---
 function sendGameState(room) {
+  // 安全に turn を決める
+  const turnName = (room.players && room.players.length > 0 && room.players[room.turnIndex])
+    ? room.players[room.turnIndex].name
+    : null;
+
   const state = {
     type: "gameState",
     turn: room.players[room.turnIndex] ? room.players[room.turnIndex].name : null,
@@ -178,6 +189,9 @@ function handlePlay(roomId, playerName, card) {
     sendToPlayer(p.ws, { type: "deal", hand: room.hands[p.name], deckCount: room.deck.length });
   });
   sendGameState(room);
+
+  room.turnIndex = room.players.length > 0 ? room.turnIndex % room.players.length : 0;
+
 }
 
 const PORT = process.env.PORT || 3000;

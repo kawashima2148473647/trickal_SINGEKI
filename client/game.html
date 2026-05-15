@@ -54,7 +54,7 @@
 
       if (msg.type === "gameState") {
         turnEl.textContent = msg.turn || "—";
-        deckCountEl.textContent = msg.deckCount || msg.deckCount === 0 ? msg.deckCount : deckCountEl.textContent;
+        if (typeof msg.deckCount !== "undefined") deckCountEl.textContent = msg.deckCount;
         renderTable(msg.table || []);
       }
 
@@ -70,8 +70,13 @@
         d.className = "card";
         d.textContent = card;
         d.onclick = () => {
-          // クリックでプレイ
+          // クライアント側でターンチェック
+          if (turnEl.textContent !== playerName) {
+            alert("今はあなたのターンではありません");
+            return;
+          }
           if (!confirm("このカードを出しますか？ " + card)) return;
+          console.log("send playCard:", { from: playerName, card });
           ws.send(JSON.stringify({ type: "playCard", from: playerName, card }));
         };
         handEl.appendChild(d);
