@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Game</title>
+  <style>
+    #hand { margin-top: 20px; }
+    .card { display:inline-block; padding:8px 12px; margin:4px; border:1px solid #333; cursor:pointer; }
+    #table { margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <h1>ゲーム画面</h1>
+  <div>あなた: <span id="me"></span></div>
+  <div>ターン: <span id="turn"></span></div>
+  <div>デッキ残り: <span id="deckCount"></span></div>
+
+  <h2>場</h2>
+  <div id="table"></div>
+
+  <h2>手札</h2>
+  <div id="hand"></div>
+
+  <script>
+    const playerName = localStorage.getItem("playerName");
+    document.getElementById("me").textContent = playerName || "unknown";
+
+    const handEl = document.getElementById("hand");
+    const tableEl = document.getElementById("table");
+    const turnEl = document.getElementById("turn");
+    const deckCountEl = document.getElementById("deckCount");
+
+    const ws = new WebSocket("wss://trickal-singeki.onrender.com/");
+
+    ws.onopen = () => {
+      console.log("game WS open, rejoin:", playerName);
+      ws.send(JSON.stringify({ type: "rejoin", name: playerName }));
+    };
+
+    let myHand = [];
+
+    ws.onmessage = (e) => {
+      console.log("game recv:", e.data);
+      const msg = JSON.parse(e.data);
+
+      if (msg.type === "deal") {
+        // サーバは個別に hand を送る
+        if (msg.hand) {
+          myHand = msg.hand;
+          renderHand();
+        }
+        if (typeof msg.deckCount !== "undefined") deckCountEl.textContent = msg.deckCount;
+      }
+
+      if (msg.type === "gameState") {
+        turnEl.textContent = msg.turn || "—";
+        deckCountEl.textContent = msg.deckCount || msg.deckCount === 0 ? msg.deckCount : deckCountEl.textContent;
+        renderTable(msg.table || []);
+      }
+
+      if (msg.type === "invalid") {
+        alert("操作エラー: " + msg.reason);
+      }
+    };
+
+    function renderHand() {
+      handEl.innerHTML = "";
+      myHand.forEach(card => {
+        const d = document.createElement("div");
+        d.className = "card";
+        d.textContent = card;
+        d.onclick = () => {
+          // クリックでプレイ
+          if (!confirm("このカードを出しますか？ " + card)) return;
+          ws.send(JSON.stringify({ type: "playCard", from: playerName, card }));
+        };
+        handEl.appendChild(d);
+      });
+    }
+
+    function renderTable(table) {
+      tableEl.innerHTML = "";
+      table.forEach(t => {
+        const d = document.createElement("div");
+        d.textContent = `${t.player}: ${t.card}`;
+        tableEl.appendChild(d);
+      });
+    }
+
+    ws.onerror = (err) => console.error("WS error", err);
+    ws.onclose = () => console.log("WS closed");
+  </script>
+</body>
+</html>

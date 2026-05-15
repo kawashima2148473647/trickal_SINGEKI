@@ -7,24 +7,24 @@
 <body>
   <h1>ユーザー一覧</h1>
   <ul id="players"></ul>
+  <button id="startBtn" style="display:none">ゲーム開始</button>
 
   <script>
     const playerName = localStorage.getItem("playerName");
     const playersEl = document.getElementById("players");
+    const startBtn = document.getElementById("startBtn");
 
     const ws = new WebSocket("wss://trickal-singeki.onrender.com/");
 
     ws.onopen = () => {
-      ws.send(JSON.stringify({
-        type: "join",
-        name: playerName
-      }));
+      console.log("WS open, sending join:", playerName);
+      ws.send(JSON.stringify({ type: "join", name: playerName }));
     };
 
     ws.onmessage = (e) => {
+      console.log("recv:", e.data);
       const msg = JSON.parse(e.data);
 
-      // 全員の一覧を受信
       if (msg.type === "playerList") {
         playersEl.innerHTML = "";
         msg.players.forEach(p => {
@@ -32,8 +32,24 @@
           li.textContent = p.name;
           playersEl.appendChild(li);
         });
+        // 自分がいるなら開始ボタンを表示（簡易: 誰でも開始可）
+        startBtn.style.display = "inline-block";
+      }
+
+      if (msg.type === "invalid") {
+        alert("サーバエラー: " + msg.reason);
       }
     };
+
+    startBtn.onclick = () => {
+      ws.send(JSON.stringify({ type: "startGame", by: playerName }));
+      // サーバが deal を送ってくるので、それを受け取ったら game.html に遷移する
+      // ここでは遷移を少し遅らせて、deal を受け取る余地を与える
+      setTimeout(() => { location.href = "game.html"; }, 300);
+    };
+
+    ws.onerror = (err) => console.error("WS error", err);
+    ws.onclose = () => console.log("WS closed");
   </script>
 </body>
 </html>
